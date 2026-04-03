@@ -26,6 +26,23 @@ export interface UISchema {
 }
 
 export interface GenerateResponse {
-  contract: string;
+  contractCode: string;
+  cargoToml: string;
   uiSchema: UISchema;
+}
+
+export interface App {
+  id: string;
+  name: string;
+  description: string;
+  contractCode: string;
+  cargoToml: string;
+  uiSchema: UISchema;
+  owner: string;
+  status: "draft" | "deploying" | "deployed" | "failed";
+  deployedAddress?: string;
+  txHash?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -16,7 +16,7 @@ export async function generateApp(
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Build an Arbitrum dApp: ${description}`,
+        content: `Build an Arbitrum Stylus dApp: ${description}`,
       },
     ],
     temperature: 0.7,
@@ -34,8 +34,34 @@ export async function generateApp(
 
   const parsed = JSON.parse(jsonStr) as GenerateResponse;
 
-  if (!parsed.contract || !parsed.uiSchema?.layout) {
+  if (!parsed.contractCode || !parsed.uiSchema?.layout) {
     throw new Error("Invalid response structure from LLM");
+  }
+
+  // Ensure cargoToml exists
+  if (!parsed.cargoToml) {
+    parsed.cargoToml = `[package]
+name = "generated-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+stylus-sdk = "0.6.0"
+alloy-primitives = "0.7"
+alloy-sol-types = "0.7"
+
+[features]
+export-abi = ["stylus-sdk/export-abi"]
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[profile.release]
+codegen-units = 1
+strip = true
+lto = true
+panic = "abort"
+opt-level = "s"`;
   }
 
   return parsed;

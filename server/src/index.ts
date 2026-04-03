@@ -12,6 +12,8 @@ import generateRouter from "./routes/generate.js";
 import appsRouter from "./routes/apps.js";
 import deployRouter from "./routes/deploy.js";
 import authRouter from "./routes/auth.js";
+import chatRouter from "./routes/chat.js";
+import compileRouter from "./routes/compile.js";
 import { getAgentAddress } from "./services/wallet.js";
 
 // Ensure data directory exists
@@ -37,6 +39,8 @@ app.use("/api", authRouter);
 app.use("/api", generateRouter);
 app.use("/api", appsRouter);
 app.use("/api", deployRouter);
+app.use("/api", chatRouter);
+app.use("/api", compileRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

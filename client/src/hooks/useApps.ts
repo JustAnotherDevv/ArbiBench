@@ -86,8 +86,11 @@ export function useApps(walletAddress: string | null) {
     await fetchApps();
   }
 
-  async function deployApp(id: string): Promise<App> {
-    // Optimistically set deploying status so UI updates immediately
+  async function deployApp(
+    id: string,
+    onLog?: (line: string) => void,
+    onDone?: (app: App, success: boolean, error?: string) => void,
+  ): Promise<App> {
     setApps((prev) =>
       prev.map((a) => (a.id === id ? { ...a, status: "deploying" as const } : a)),
     );
@@ -96,6 +99,63 @@ export function useApps(walletAddress: string | null) {
       method: "POST",
       headers,
     });
+
+    if (!res.body) throw new Error("No response body");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finalApp: App | null = null;
+    let deployError: string | undefined;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+        const dataLine = frame.split("\n").find((l) => l.startsWith("data: "));
+        if (!dataLine) continue;
+        try {
+          const event = JSON.parse(dataLine.slice(6)) as {
+            type: string; line?: string; app?: App; message?: string;
+          };
+          if (event.type === "log" && event.line) onLog?.(event.line);
+          else if (event.type === "success" && event.app) {
+            finalApp = event.app;
+            onDone?.(event.app, true);
+          } else if (event.type === "error") {
+            deployError = event.message;
+            if (event.app) { finalApp = event.app; onDone?.(event.app, false, event.message); }
+          }
+        } catch { /* skip */ }
+      }
+    }
+
+    await fetchApps();
+    if (!finalApp) throw new Error(deployError ?? "Deployment failed");
+    return finalApp;
+  }
+
+  async function publishApp(id: string): Promise<App> {
+    const res = await fetch(`${API}/apps/${id}/publish`, { method: "POST", headers });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to publish");
+    }
+    const app: App = await res.json();
+    await fetchApps();
+    return app;
+  }
+
+  async function unpublishApp(id: string): Promise<App> {
+    const res = await fetch(`${API}/apps/${id}/unpublish`, { method: "POST", headers });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to unpublish");
+    }
     const app: App = await res.json();
     await fetchApps();
     return app;
@@ -106,11 +166,13 @@ export function useApps(walletAddress: string | null) {
     selectedApp,
     selectedId,
     loading,
-    selectApp: setSelectedId,
+    selectApp: (id: string | null) => setSelectedId(id),
     createApp,
     updateApp,
     deleteApp,
     deployApp,
+    publishApp,
+    unpublishApp,
     refreshApps: fetchApps,
   };
 }

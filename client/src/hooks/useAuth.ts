@@ -1,93 +1,144 @@
 import { useState, useEffect, useCallback } from "react";
-import { BrowserProvider } from "ethers";
+import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
+import { injected } from "wagmi/connectors";
+import { privateKeyToAccount } from "viem/accounts";
+import {
+  getOrCreateBurnerKey,
+  clearBurnerSession,
+  setBurnerActive,
+  isBurnerActive,
+} from "@/lib/burnerWallet";
 
 interface AuthState {
   address: string | null;
   loading: boolean;
   error: string | null;
+  isBurner: boolean;
 }
 
 export function useAuth() {
+  const { address: wagmiAddress, isConnected } = useAccount();
+  const { connectAsync } = useConnect();
+  const { disconnectAsync } = useDisconnect();
+  const { signMessageAsync } = useSignMessage();
+
   const [state, setState] = useState<AuthState>({
     address: localStorage.getItem("arbibench-address"),
     loading: false,
     error: null,
+    isBurner: isBurnerActive(),
   });
 
+  // If wagmi disconnects and we're NOT using burner, clear auth
+  useEffect(() => {
+    if (!isConnected && state.address && !state.isBurner) {
+      localStorage.removeItem("arbibench-address");
+      setState((s) => ({ ...s, address: null }));
+    }
+  }, [isConnected, state.address, state.isBurner]);
+
+  // If wagmi switches to a different account, clear auth
+  useEffect(() => {
+    if (!state.isBurner && wagmiAddress && state.address &&
+        wagmiAddress.toLowerCase() !== state.address.toLowerCase()) {
+      localStorage.removeItem("arbibench-address");
+      setState((s) => ({ ...s, address: null }));
+    }
+  }, [wagmiAddress, state.address, state.isBurner]);
+
+  // --- MetaMask / injected sign-in ---
   const signIn = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
-
     try {
-      if (!window.ethereum) {
-        throw new Error("No Ethereum wallet found. Install MetaMask.");
+      let address = wagmiAddress;
+      if (!address) {
+        const result = await connectAsync({ connector: injected() });
+        address = result.accounts[0];
       }
+      if (!address) throw new Error("No account found after connecting");
 
-      const provider = new BrowserProvider(window.ethereum as never);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
-
-      // Get nonce from server
       const nonceRes = await fetch(`/api/auth/nonce/${address}`);
-      const { nonce } = await nonceRes.json();
+      if (!nonceRes.ok) throw new Error("Failed to get nonce");
+      const { nonce } = await nonceRes.json() as { nonce: string };
 
-      // Sign message
       const message = `Sign in to ArbiBench\n\nNonce: ${nonce}`;
-      const signature = await signer.signMessage(message);
+      const signature = await signMessageAsync({ message });
 
-      // Verify with server
       const verifyRes = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address, signature, nonce }),
       });
-
       if (!verifyRes.ok) {
-        const err = await verifyRes.json();
+        const err = await verifyRes.json() as { error?: string };
         throw new Error(err.error || "Verification failed");
       }
 
-      const result = await verifyRes.json();
-      const authedAddress = result.address;
-
-      localStorage.setItem("arbibench-address", authedAddress);
-      setState({ address: authedAddress, loading: false, error: null });
-
-      return authedAddress;
+      const result = await verifyRes.json() as { address: string };
+      localStorage.setItem("arbibench-address", result.address);
+      localStorage.removeItem("arbibench-wallet-type");
+      setState({ address: result.address, loading: false, error: null, isBurner: false });
+      return result.address;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Sign in failed";
       setState((s) => ({ ...s, loading: false, error: msg }));
       return null;
     }
-  }, []);
+  }, [wagmiAddress, connectAsync, signMessageAsync]);
 
-  const signOut = useCallback(() => {
-    localStorage.removeItem("arbibench-address");
-    setState({ address: null, loading: false, error: null });
-  }, []);
+  // --- Burner wallet sign-in ---
+  const signInWithBurner = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const pk = getOrCreateBurnerKey();
+      const account = privateKeyToAccount(pk);
+      const address = account.address;
 
-  // Check if wallet is still connected
-  useEffect(() => {
-    if (state.address && window.ethereum) {
-      window.ethereum
-        .request?.({ method: "eth_accounts" })
-        .then((accounts: unknown) => {
-          const accts = accounts as string[];
-          if (
-            accts.length === 0 ||
-            accts[0].toLowerCase() !== state.address
-          ) {
-            signOut();
-          }
-        })
-        .catch(() => {});
+      const nonceRes = await fetch(`/api/auth/nonce/${address}`);
+      if (!nonceRes.ok) throw new Error("Failed to get nonce");
+      const { nonce } = await nonceRes.json() as { nonce: string };
+
+      const message = `Sign in to ArbiBench\n\nNonce: ${nonce}`;
+      const signature = await account.signMessage({ message });
+
+      const verifyRes = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, signature, nonce }),
+      });
+      if (!verifyRes.ok) {
+        const err = await verifyRes.json() as { error?: string };
+        throw new Error(err.error || "Verification failed");
+      }
+
+      const result = await verifyRes.json() as { address: string };
+      localStorage.setItem("arbibench-address", result.address);
+      setBurnerActive();
+      setState({ address: result.address, loading: false, error: null, isBurner: true });
+      return result.address;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Burner sign-in failed";
+      setState((s) => ({ ...s, loading: false, error: msg }));
+      return null;
     }
-  }, [state.address, signOut]);
+  }, []);
+
+  const signOut = useCallback(async () => {
+    localStorage.removeItem("arbibench-address");
+    clearBurnerSession();
+    setState({ address: null, loading: false, error: null, isBurner: false });
+    if (!state.isBurner) {
+      try { await disconnectAsync(); } catch { /* ignore */ }
+    }
+  }, [state.isBurner, disconnectAsync]);
 
   return {
     address: state.address,
     loading: state.loading,
     error: state.error,
+    isBurner: state.isBurner,
     signIn,
+    signInWithBurner,
     signOut,
     isAuthenticated: !!state.address,
   };

@@ -5,9 +5,14 @@ import { deployContract } from "../services/deploy.js";
 const router = Router();
 
 router.post("/apps/:id/deploy", async (req, res) => {
+  const owner = ((req.headers["x-wallet-address"] as string) || "").toLowerCase();
   const app = storage.getById(req.params.id);
   if (!app) {
     res.status(404).json({ error: "App not found" });
+    return;
+  }
+  if (app.owner !== owner) {
+    res.status(403).json({ error: "Only the owner can deploy this app" });
     return;
   }
 

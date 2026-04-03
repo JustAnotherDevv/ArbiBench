@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { AppView } from "@/components/AppView";
+import { useAuth } from "@/hooks/useAuth";
 import { useApps } from "@/hooks/useApps";
 import { useGenerate } from "@/hooks/useGenerate";
 import { Button } from "@/components/ui/button";
@@ -17,21 +18,22 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Wallet } from "lucide-react";
 import type { App as AppType } from "@/types/schema";
 
 function App() {
+  const auth = useAuth();
   const {
     apps,
     selectedApp,
     selectedId,
     loading: appsLoading,
-    walletAddress,
     selectApp,
     createApp,
     updateApp,
     deleteApp,
     deployApp,
-  } = useApps();
+  } = useApps(auth.address);
 
   const { generate, loading: generating } = useGenerate();
 
@@ -69,8 +71,8 @@ function App() {
     try {
       await updateApp(id, data);
       toast.success("Saved");
-    } catch {
-      toast.error("Failed to save");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
     }
   };
 
@@ -110,60 +112,86 @@ function App() {
     try {
       await deleteApp(id);
       toast.success(`Deleted "${app?.name}"`);
-    } catch {
-      toast.error("Failed to delete");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete");
     }
   };
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <Header walletAddress={walletAddress} />
+      <Header
+        walletAddress={auth.address}
+        onSignIn={auth.signIn}
+        onSignOut={auth.signOut}
+        authLoading={auth.loading}
+      />
 
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          apps={apps}
-          selectedId={selectedId}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onSelect={selectApp}
-          onNewApp={() => setShowNewDialog(true)}
-        />
-
-        <main className="flex-1 overflow-auto p-6">
-          {appsLoading ? (
-            <div className="max-w-5xl mx-auto space-y-4">
-              <Skeleton className="h-10 w-64" />
-              <Skeleton className="h-6 w-96" />
-              <Skeleton className="h-96 w-full" />
-            </div>
-          ) : selectedApp ? (
-            <AppView
-              app={selectedApp}
-              onSave={handleSave}
-              onRegenerate={handleRegenerate}
-              onDeploy={handleDeploy}
-              onDelete={handleDelete}
-              deploying={deploying}
-              regenerating={generating}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center space-y-4">
-                <h2 className="text-2xl font-bold tracking-tight">
-                  Build Arbitrum Stylus dApps with AI
-                </h2>
-                <p className="text-muted-foreground max-w-md mx-auto">
-                  Describe your app and ArbiBench generates the Rust smart
-                  contract and dynamic UI. Edit, preview, and deploy.
-                </p>
-                <Button onClick={() => setShowNewDialog(true)} size="lg">
-                  Create Your First App
-                </Button>
-              </div>
-            </div>
-          )}
+      {!auth.isAuthenticated ? (
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-6 max-w-md">
+            <h2 className="text-3xl font-bold tracking-tight">
+              Build Arbitrum Stylus dApps with AI
+            </h2>
+            <p className="text-muted-foreground">
+              Connect your Ethereum wallet to start building. Describe your app
+              and ArbiBench generates the Rust smart contract and dynamic UI.
+            </p>
+            <Button size="lg" onClick={auth.signIn} disabled={auth.loading}>
+              <Wallet className="mr-2 h-5 w-5" />
+              {auth.loading ? "Connecting..." : "Connect Wallet to Start"}
+            </Button>
+            {auth.error && (
+              <p className="text-sm text-destructive-foreground">{auth.error}</p>
+            )}
+          </div>
         </main>
-      </div>
+      ) : (
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar
+            apps={apps}
+            selectedId={selectedId}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onSelect={selectApp}
+            onNewApp={() => setShowNewDialog(true)}
+          />
+
+          <main className="flex-1 overflow-auto p-6">
+            {appsLoading ? (
+              <div className="max-w-5xl mx-auto space-y-4">
+                <Skeleton className="h-10 w-64" />
+                <Skeleton className="h-6 w-96" />
+                <Skeleton className="h-96 w-full" />
+              </div>
+            ) : selectedApp ? (
+              <AppView
+                app={selectedApp}
+                currentUser={auth.address}
+                onSave={handleSave}
+                onRegenerate={handleRegenerate}
+                onDeploy={handleDeploy}
+                onDelete={handleDelete}
+                deploying={deploying}
+                regenerating={generating}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <div className="text-center space-y-4">
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    Welcome back
+                  </h2>
+                  <p className="text-muted-foreground max-w-md mx-auto">
+                    Create a new app or select one from the sidebar.
+                  </p>
+                  <Button onClick={() => setShowNewDialog(true)} size="lg">
+                    Create Your First App
+                  </Button>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      )}
 
       {/* New App Dialog */}
       <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>

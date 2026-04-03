@@ -11,6 +11,7 @@ import type { App, UISchema } from "@/types/schema";
 
 interface AppViewProps {
   app: App;
+  currentUser: string | null;
   onSave: (id: string, data: Partial<App>) => Promise<void>;
   onRegenerate: (description: string) => void;
   onDeploy: (id: string) => void;
@@ -21,6 +22,7 @@ interface AppViewProps {
 
 export function AppView({
   app,
+  currentUser,
   onSave,
   onRegenerate,
   onDeploy,
@@ -28,6 +30,7 @@ export function AppView({
   deploying,
   regenerating,
 }: AppViewProps) {
+  const isOwner = currentUser?.toLowerCase() === app.owner?.toLowerCase();
   const [name, setName] = useState(app.name);
   const [description, setDescription] = useState(app.description);
   const [contractCode, setContractCode] = useState(app.contractCode);
@@ -76,13 +79,27 @@ export function AppView({
             onChange={(e) => setName(e.target.value)}
             className="text-xl font-bold border-none bg-transparent px-0 h-auto focus-visible:ring-0"
             placeholder="App name"
+            readOnly={!isOwner}
           />
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="text-sm text-muted-foreground border-none bg-transparent px-0 h-auto focus-visible:ring-0"
             placeholder="Description"
+            readOnly={!isOwner}
           />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Owner:</span>
+            <a
+              href={`https://sepolia.arbiscan.io/address/${app.owner}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono hover:text-primary"
+            >
+              {app.owner.slice(0, 6)}...{app.owner.slice(-4)}
+            </a>
+            {isOwner && <Badge variant="outline" className="text-[10px] px-1.5 py-0">You</Badge>}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge
@@ -147,6 +164,7 @@ export function AppView({
       </Tabs>
 
       {/* Action bar */}
+      {isOwner ? (
       <div className="flex items-center justify-between border-t border-border pt-4">
         <Button
           variant="ghost"
@@ -189,6 +207,11 @@ export function AppView({
           </Button>
         </div>
       </div>
+      ) : (
+      <div className="border-t border-border pt-4 text-center text-sm text-muted-foreground">
+        Only the owner can edit, delete, or deploy this app.
+      </div>
+      )}
     </div>
   );
 }

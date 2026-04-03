@@ -11,6 +11,7 @@ import cors from "cors";
 import generateRouter from "./routes/generate.js";
 import appsRouter from "./routes/apps.js";
 import deployRouter from "./routes/deploy.js";
+import authRouter from "./routes/auth.js";
 import { getAgentAddress } from "./services/wallet.js";
 
 // Ensure data directory exists
@@ -32,6 +33,7 @@ app.get("/api/health", (_req, res) => {
   }
 });
 
+app.use("/api", authRouter);
 app.use("/api", generateRouter);
 app.use("/api", appsRouter);
 app.use("/api", deployRouter);

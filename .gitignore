@@ -9,3 +9,6 @@ restart.sh
 logs/
 .DS_Store
 .vercel
+*.db
+*.db-shm
+*.db-wal

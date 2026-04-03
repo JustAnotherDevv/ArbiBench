@@ -3,11 +3,11 @@
     "id": "6fe2eaa9-21bf-4016-ae3f-5b91c74f7452",
     "name": "Tip Jar",
     "description": "A simple tip jar contract on Arbitrum Stylus.",
-    "contractCode": "#![cfg_attr(not(any(feature = \"export-abi\", test)), no_main)]\nextern crate alloc;\n\nuse stylus_sdk::{    alloy_primitives::{Address, U256},    prelude::*,    msg, block,};\n\nsol_storage! {\n    #[entrypoint]\n    pub struct TipJar {\n        address owner;\n        uint256 total_tips;\n        mapping(address => uint256) tips;\n    }\n}\n\n#[public]\nimpl TipJar {\n    pub fn init(&mut self) -> Result<(), Vec<u8>> {\n        self.owner.set(msg::sender());\n        Ok(())\n    }\n\n    pub fn owner(&self) -> Result<Address, Vec<u8>> {\n        Ok(self.owner.get())\n    }\n\n    pub fn total_tips(&self) -> Result<U256, Vec<u8>> {\n        Ok(self.total_tips.get())\n    }\n\n    pub fn tips_from(&self, tipper: Address) -> Result<U256, Vec<u8>> {\n        Ok(self.tips.get(tipper))\n    }\n\n    #[payable]\n    pub fn tip(&mut self) -> Result<(), Vec<u8>> {\n        let value = msg::value();\n        let sender = msg::sender();\n        if value == U256::ZERO {\n            return Err(\"must send ETH\".as_bytes().to_vec());\n        }\n        self.tips.setter(sender).set(self.tips.get(sender) + value);\n        self.total_tips.set(self.total_tips.get() + value);\n        Ok(())\n    }\n\n    pub fn withdraw(&mut self) -> Result<(), Vec<u8>> {\n        if msg::sender() != self.owner.get() {\n            return Err(\"only owner\".as_bytes().to_vec());\n        }\n        let balance = contract::balance();\n        unsafe { call::transfer_eth(self.owner.get(), balance)? };\n        Ok(())\n    }\n}",
-    "cargoToml": "[package]\nname = \"tip-jar\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nstylus-sdk = \"0.6.0\"\nalloy-primitives = \"0.7\"\nalloy-sol-types = \"0.7\"\n\n[dev-dependencies]\ntokio = { version = \"1\", features = [\"full\"] }\n\n[features]\nexport-abi = [\"stylus-sdk/export-abi\"]\n\n[lib]\ncrate-type = [\"lib\", \"cdylib\"]",
+    "contractCode": " #![cfg_attr(not(any(feature = \"export-abi\", test)), no_main)]\nextern crate alloc;\n\nuse stylus_sdk::{\n    alloy_primitives::{Address, U256},\n    prelude::*,\n};\n\nsol_storage! {\n    #[entrypoint]\n    pub struct TipJar {\n        address owner;\n        uint256 total_tips;\n        mapping(address => uint256) tips;\n    }\n}\n\n#[public]\nimpl TipJar {\n    pub fn init(&mut self) -> Result<(), Vec<u8>> {\n        self.owner.set(self.__stylus_host.msg_sender());\n        Ok(())\n    }\n\n    pub fn owner(&self) -> Result<Address, Vec<u8>> {\n        Ok(self.owner.get())\n    }\n\n    pub fn total_tips(&self) -> Result<U256, Vec<u8>> {\n        Ok(self.total_tips.get())\n    }\n\n    pub fn tips_from(&self, tipper: Address) -> Result<U256, Vec<u8>> {\n        Ok(self.tips.get(tipper))\n    }\n\n    #[payable]\n    pub fn tip(&mut self) -> Result<(), Vec<u8>> {\n        let value = self.__stylus_host.msg_value();\n        let sender = self.__stylus_host.msg_sender();\n        if value == U256::ZERO {\n            return Err(\"must send ETH\".as_bytes().to_vec());\n        }\n        self.tips.setter(sender).set(self.tips.get(sender) + value);\n        self.total_tips.set(self.total_tips.get() + value);\n        Ok(())\n    }\n\n    pub fn withdraw(&mut self) -> Result<(), Vec<u8>> {\n        if self.__stylus_host.msg_sender() != self.owner.get() {\n            return Err(\"only owner\".as_bytes().to_vec());\n        }\n        let balance = self.__stylus_host.balance(self.__stylus_host.contract_address());\n        stylus_sdk::call::transfer::transfer_eth(self, self.owner.get(), balance)?;\n        Ok(())\n    }\n}",
+    "cargoToml": "[package]\nname = \"tip-jar\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nstylus-sdk = \"0.10.2\"\nalloy-primitives = \"0.7\"\nalloy-sol-types = \"0.7\"\n\n[features]\nexport-abi = [\"stylus-sdk/export-abi\"]\n\n[lib]\ncrate-type = [\"lib\", \"cdylib\"]",
     "uiSchema": {
       "title": "Tip Jar",
-      "description": "A simple tip jar contract on Arbitrum Stylus.",
+      "description": "A simple smart contract for collecting tips.",
       "layout": {
         "type": "column",
         "children": [
@@ -20,144 +20,73 @@
           },
           {
             "type": "text",
-            "content": "This contract allows anyone to send tips to the contract owner. The owner can withdraw the accumulated tips."
+            "content": "This contract allows users to send ETH tips. The contract owner can withdraw the collected tips."
           },
           {
-            "type": "card",
+            "type": "separator"
+          },
+          {
+            "type": "heading",
+            "content": "Actions",
+            "props": {
+              "level": 2
+            }
+          },
+          {
+            "type": "row",
             "children": [
-              {
-                "type": "heading",
-                "content": "Initialize Contract",
-                "props": {
-                  "level": 2
-                }
-              },
-              {
-                "type": "text",
-                "content": "Initialize the contract, setting the deployer as the owner."
-              },
               {
                 "type": "button",
-                "content": "Initialize",
+                "content": "Tip",
                 "props": {
-                  "variant": "primary",
-                  "action": "init"
+                  "variant": "default"
                 }
-              }
-            ]
-          },
-          {
-            "type": "card",
-            "children": [
-              {
-                "type": "heading",
-                "content": "Send Tip",
-                "props": {
-                  "level": 2
-                }
-              },
-              {
-                "type": "text",
-                "content": "Send ETH to the contract as a tip."
-              },
-              {
-                "type": "button",
-                "content": "Send Tip",
-                "props": {
-                  "variant": "primary",
-                  "action": "tip"
-                }
-              }
-            ]
-          },
-          {
-            "type": "card",
-            "children": [
-              {
-                "type": "heading",
-                "content": "Withdraw Tips",
-                "props": {
-                  "level": 2
-                }
-              },
-              {
-                "type": "text",
-                "content": "Withdraw all accumulated tips to the owner's address. Only the owner can call this function."
               },
               {
                 "type": "button",
                 "content": "Withdraw",
                 "props": {
-                  "variant": "primary",
-                  "action": "withdraw"
+                  "variant": "destructive"
                 }
               }
             ]
           },
           {
-            "type": "card",
-            "children": [
-              {
-                "type": "heading",
-                "content": "Contract Information",
-                "props": {
-                  "level": 2
-                }
-              },
-              {
-                "type": "row",
-                "children": [
-                  {
-                    "type": "column",
-                    "children": [
-                      {
-                        "type": "label",
-                        "content": "Owner Address"
-                      },
-                      {
-                        "type": "text",
-                        "content": "ownerAddress",
-                        "props": {
-                          "className": "font-mono"
-                        }
-                      },
-                      {
-                        "type": "button",
-                        "content": "Get Owner",
-                        "props": {
-                          "variant": "outline",
-                          "action": "owner"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "type": "column",
-                    "children": [
-                      {
-                        "type": "label",
-                        "content": "Total Tips"
-                      },
-                      {
-                        "type": "text",
-                        "content": "totalTips",
-                        "props": {
-                          "className": "font-mono"
-                        }
-                      },
-                      {
-                        "type": "button",
-                        "content": "Get Total Tips",
-                        "props": {
-                          "variant": "outline",
-                          "action": "total_tips"
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
+            "type": "separator"
+          },
+          {
+            "type": "heading",
+            "content": "Contract Info",
+            "props": {
+              "level": 2
+            }
+          },
+          {
+            "type": "text",
+            "content": "Owner:"
+          },
+          {
+            "type": "text",
+            "content": "Total Tips:"
+          },
+          {
+            "type": "input",
+            "name": "tipper_address",
+            "props": {
+              "type": "text",
+              "placeholder": "Tipper Address"
+            }
+          },
+          {
+            "type": "button",
+            "content": "Get Tips From Tipper",
+            "props": {
+              "variant": "outline"
+            }
+          },
+          {
+            "type": "text",
+            "content": "Tips from Tipper:"
           }
         ]
       }
@@ -165,7 +94,7 @@
     "owner": "0xe56e01285b88f674ae20073b415a1e11c63a59ce",
     "status": "deployed",
     "createdAt": "2026-04-03T18:55:16.090Z",
-    "updatedAt": "2026-04-03T20:09:20.898Z",
+    "updatedAt": "2026-04-03T20:17:44.197Z",
     "deployedAddress": "0x9374a09df9e339d962ea94b54c650dfe6347bfe6",
     "txHash": "unknown"
   }

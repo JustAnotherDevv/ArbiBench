@@ -1,15 +1,17 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+
 import express from "express";
 import cors from "cors";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import generateRouter from "./routes/generate.js";
 import appsRouter from "./routes/apps.js";
 import deployRouter from "./routes/deploy.js";
 import { getAgentAddress } from "./services/wallet.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Ensure data directory exists
 fs.mkdirSync(path.join(__dirname, "../data"), { recursive: true });

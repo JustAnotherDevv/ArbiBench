@@ -2,15 +2,22 @@ import OpenAI from "openai";
 import { SYSTEM_PROMPT } from "../prompts/system.js";
 import type { GenerateResponse } from "../../../shared/schema.js";
 
-const openai = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+let client: OpenAI | null = null;
+
+function getClient(): OpenAI {
+  if (!client) {
+    client = new OpenAI({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: process.env.OPENROUTER_API_KEY,
+    });
+  }
+  return client;
+}
 
 export async function generateApp(
   description: string,
 ): Promise<GenerateResponse> {
-  const response = await openai.chat.completions.create({
+  const response = await getClient().chat.completions.create({
     model: "google/gemini-2.0-flash-001",
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -46,7 +53,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-stylus-sdk = "0.6.0"
+stylus-sdk = "0.10.2"
 alloy-primitives = "0.7"
 alloy-sol-types = "0.7"
 
